@@ -1,0 +1,74 @@
+CSE506 Homework -1
+
+Submitted By - Tarun Lohani, 110921666
+
+
+OVERVIEW -
+
+
+This assignment consists of code for a new System call -
+
+./xhw1 <Options> <Output_File_Path> <Input_File1_Path> <Input_File2_Path>.
+
+This system call merges the contents of two sorted files to one file based on the options provided by the user. The project has a user program - xhw1.c and a kernel program - sys_xmergesort.c. User program triggers the system call from te userland and hands over the control to kernel. For merging the files, I have used the simple merge sort logic. The program reads the input and output files in a two separate buffers of size 4KB. The contents of these buffers are merged and written in another buffer. Once the output buffer is full, it writes all the data to the output file.
+
+
+BUILD AND INSTALL INSTRUCTIONS -
+
+
+Kernel Build Option - I have enclosed the .config file as kernel.config in the assignment. This file is used to build the kernel.
+
+Install and Test - Under the hw1/ directory, doing a "make all" will produce a kernel module sys_xmergesort.ko and an executable xhw1. The directory also contains install_module.sh for building and loading kernel module.
+
+Run syscall - Once the kernel module is loaded, syscall can be tested by running -
+./xhw1 <Options> <Output_File_Path> <Input_File1_Path> <Input_File2_Path>
+
+
+DESIGN DETAILS -
+
+
+Userspace Parameters validation - The userspace parameters are wrapped in inputstruct struct instance (struct is defined in myinput.h). This is passed to the kernel space as a void pointer object. Following checks have been implemented in user space to avoid passing bad parameters-
+
+- If options contains values other than a, u, i, t, d.
+- If the options are not repeated.
+- If the syscall has three arguments.
+
+Kernelspace Parameters validation - 
+
+- Checking if arguments are not null and access_ok.
+- If arguments are missing, returning error.
+- If both the input files are pointing to the same file then returning error.
+- If first input file does not exist/ bad file/ read permission denied, returning error.
+- If second input file does not exist/ bad file/ read permission denied, returning error.
+- If error in opening/creating output file, returning error.
+
+Merging Logic -
+
+- Once all the checks are done, two buffers of 4KB are initialized to read the input files.
+- An output buffer is also initialized to write the data to the output file.
+- A loop is initialized till any one of the input file ends.
+- Input files are read into the buffers and offset is maintained for the next read.
+- Once I have two input buffers, two pointers are attached to the start of the buffer.
+- Now buffer is read line by line (using delimiter '\n' as end of a line). Lines of both the buffers are read and compared. Final line is written the output buffer depending on the flags provided by the user (see input flags handling below).
+- Buffercounters are keeping track of the amount of the input buffers read and output buffer written. If any one of the input buffer is full, again the input file is read to the buffer from the end of the last complete sentence. Similarly if output buffer is full, it writes its content to the output file and reinitialized.
+- Once any one of the input ends, the remaining input of the other file is appended to the output file according to the flags provided by the user.
+- All the buffers and kernel copy of arguments are freed from memory.
+
+Comparision Logic -
+
+- My comparision logic compares two input lines, character by character based on ASCII values.
+- compare_strs() function compares two input lines. If the lines are same, it returns 0. If line 1 should come first in lexographical ordering, it returns 1 and if line 2 should come first, it returns -1.
+
+Input Flag Handling -
+
+-a and -u - While writing a line to the output buffer, I am comparing it with the last line written. If they are duplicates and a flag is on, I continue writing the line. If u flag is on, I do not write the duplicate line. If both u and a flags are on, I am returning error to the user.
+
+-t - While writing a line to the output buffer, I am comparing it with the last line written. If the previous written line is lexographically greater than current line I check -t flag. If t flag is on, I skip the current line and go to next. Otherwise system call terminates.
+
+-i - While comparing the files in the compare_strs() function, if the i flag is on, comparision is done in case insensitive manner. Otherwise, case sensitive comparision is done.
+
+-d - There is a counter which keeps the count of the data written in the temporary output file. If d flag is on, this counter value is copied to the user space using copy_to_user function. Otherwise, not copied.
+ 
+
+Issues -
+The code has some bugs. It gives wrong outputs sometimes for files bigger than 4KB. Also there are some unresolved crash issues. If the kernel crashes please make clean the module or reboot.
